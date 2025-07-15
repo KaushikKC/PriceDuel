@@ -7,9 +7,9 @@ contract PredictionFactory {
     enum Asset { BTC, ETH, SOL }
 
     // Pyth price feed IDs (replace with actual values from Pyth docs)
-    bytes32 public constant BTC_FEED_ID = 0x8d8e991e3b6e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e;
-    bytes32 public constant ETH_FEED_ID = 0x9d9e991e3b6e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e;
-    bytes32 public constant SOL_FEED_ID = 0xad9e991e3b6e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e3b2e;
+    bytes32 public constant BTC_FEED_ID = 0xe62df6c8b4a85fe1a67db44dc12de5db330f7ac66b72dc658afedf0f4a415b43;
+    bytes32 public constant ETH_FEED_ID = 0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace;
+    bytes32 public constant SOL_FEED_ID = 0xef0d8b6fda2ceba41da15d4095d1da392a0d2f8ed0c6c7bc0f4cfac8c280b56d;
 
     mapping(Asset => bytes32) public priceFeedIds;
     IPyth public pyth;
