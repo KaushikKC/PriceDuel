@@ -1,7 +1,8 @@
 import mongoose from "mongoose";
 
 const MONGO_URI =
-  process.env.MONGO_URI || "mongodb://localhost:27017/price-dual";
+  process.env.MONGO_URI ||
+  "mongodb+srv://kccreations1704:Dh6RacrAhYHxzpX4@cluster0.4lij9.mongodb.net/";
 
 export async function connectDB() {
   if (mongoose.connection.readyState === 1) return;

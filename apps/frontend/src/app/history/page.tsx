@@ -11,59 +11,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-
-const mockHistory = [
-  {
-    id: "DUEL001",
-    asset: "BTC",
-    date: "2024-01-15",
-    userPrediction: 43500.0,
-    opponentPrediction: 43180.25,
-    finalPrice: 43425.8,
-    winner: "user",
-    amount: 500,
-  },
-  {
-    id: "DUEL002",
-    asset: "ETH",
-    date: "2024-01-14",
-    userPrediction: 2650.0,
-    opponentPrediction: 2675.5,
-    finalPrice: 2668.32,
-    winner: "opponent",
-    amount: 100,
-  },
-  {
-    id: "DUEL003",
-    asset: "SOL",
-    date: "2024-01-13",
-    userPrediction: 175.25,
-    opponentPrediction: 178.9,
-    finalPrice: 176.45,
-    winner: "user",
-    amount: 1000,
-  },
-  {
-    id: "DUEL004",
-    asset: "BTC",
-    date: "2024-01-12",
-    userPrediction: 42800.0,
-    opponentPrediction: 42750.25,
-    finalPrice: 42775.6,
-    winner: "opponent",
-    amount: 500,
-  },
-  {
-    id: "DUEL005",
-    asset: "ETH",
-    date: "2024-01-11",
-    userPrediction: 2580.75,
-    opponentPrediction: 2620.0,
-    finalPrice: 2585.2,
-    winner: "user",
-    amount: 100,
-  },
-];
+import { useAccount } from "wagmi";
+import { useEffect, useState } from "react";
 
 const assetIcons = {
   BTC: "₿",
@@ -78,10 +27,23 @@ const assetColors = {
 };
 
 export default function HistoryPage() {
-  const wins = mockHistory.filter((duel) => duel.winner === "user").length;
-  const totalDuels = mockHistory.length;
+  const { address: wallet, isConnected } = useAccount();
+  const [history, setHistory] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!wallet) return;
+    setLoading(true);
+    fetch(`/api/pools/user/${wallet}/history`).then(async (res) => {
+      const data = await res.json();
+      setHistory(data);
+      setLoading(false);
+    });
+  }, [wallet]);
+
+  const wins = history.filter((duel) => duel.winner === "user").length;
+  const totalDuels = history.length;
   const winRate = ((wins / totalDuels) * 100).toFixed(1);
-  const totalWinnings = mockHistory
+  const totalWinnings = history
     .filter((duel) => duel.winner === "user")
     .reduce((sum, duel) => sum + duel.amount * 2, 0);
 
@@ -224,7 +186,7 @@ export default function HistoryPage() {
 
             {/* Table Body */}
             <div className="divide-y divide-[#00F0B5]/10">
-              {mockHistory.map((duel, index) => (
+              {history.map((duel, index) => (
                 <motion.div
                   key={duel.id}
                   className="grid grid-cols-2 md:grid-cols-7 gap-4 p-6 hover:bg-[#00F0B5]/5 transition-colors duration-200 group"

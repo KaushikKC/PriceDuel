@@ -8,6 +8,8 @@ import {
   DollarSign,
   Target,
   Sparkles,
+  Clock,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { useSearchParams, useRouter } from "next/navigation";
 import { getLatestPythPrices } from "@/lib/pyth";
+import { useAccount } from "wagmi";
 
 const assetIcons = {
   BTC: "₿",
@@ -39,26 +42,31 @@ const mockPrices = {
   SOL: 175.89,
 };
 
+// Placeholder for wallet address (replace with real wallet integration)
+const WALLET = "0xTestWallet123";
+
 export default function DuelPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [selectedAsset, setSelectedAsset] = useState(
-    searchParams.get("asset") || "BTC"
+    (searchParams.get("asset") as "BTC" | "ETH" | "SOL") || "BTC"
   );
   const [selectedAmount, setSelectedAmount] = useState(
     searchParams.get("amount") || "100"
   );
   const [prediction, setPrediction] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const action = searchParams.get("action") || "create";
-  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [waitingRoom, setWaitingRoom] = useState(false);
+  const [waitingTimeout, setWaitingTimeout] = useState(false);
+  const [polling, setPolling] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showPredictionInput, setShowPredictionInput] = useState(true);
   const [isPriceLoading, setIsPriceLoading] = useState(true);
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const poolId = searchParams.get("poolId");
+  const { address: wallet, isConnected } = useAccount();
 
-  // When asset changes, reset amount to default
-  useEffect(() => {
-    setSelectedAmount("100");
-  }, [selectedAsset]);
-
+  // Fetch price logic (unchanged)
   useEffect(() => {
     let isMounted = true;
     async function fetchPrice() {
@@ -66,41 +74,91 @@ export default function DuelPage() {
       try {
         const prices = await getLatestPythPrices();
         if (isMounted && prices[selectedAsset]) {
-          // Remove $ and commas, parse as float
           const price = parseFloat(
             (prices[selectedAsset] as string).replace(/[$,]/g, "")
           );
           setCurrentPrice(price);
         }
       } catch {
-        // fallback to mock price if error
         setCurrentPrice(mockPrices[selectedAsset as keyof typeof mockPrices]);
       } finally {
         setIsPriceLoading(false);
       }
     }
     fetchPrice();
-    const timer = setTimeout(fetchPrice, 60000); // update once after 1 minute
+    const timer = setTimeout(fetchPrice, 60000);
     return () => {
       isMounted = false;
       clearTimeout(timer);
     };
   }, [selectedAsset]);
 
+  // Join pool handler
   const handleSubmit = async () => {
-    if (!prediction) return;
-
+    if (!prediction || !poolId || !wallet) return;
     setIsSubmitting(true);
-
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-
-    // Redirect to active duel page
-    router.push(
-      `/active-duel?asset=${selectedAsset}&amount=${selectedAmount}&prediction=${prediction}`
-    );
+    setError(null);
+    try {
+      const res = await fetch(`/api/pools/${poolId}/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ wallet, prediction: Number(prediction) }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setError(data.error || "Failed to join pool");
+        setIsSubmitting(false);
+        return;
+      }
+      const data = await res.json();
+      if (data.status === "waiting") {
+        setWaitingRoom(true);
+        setShowPredictionInput(false);
+        setPolling(true);
+      } else if (data.status === "active") {
+        // Both players joined, go to match page
+        router.push(`/active-duel?poolId=${poolId}&wallet=${wallet}`);
+      }
+    } catch {
+      setError("Failed to join pool");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
+  // Poll pool state if in waiting room
+  useEffect(() => {
+    if (!polling || !poolId) return;
+    let timeout: NodeJS.Timeout;
+    const poll = async () => {
+      try {
+        const res = await fetch(`/api/pools/${poolId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.status === "active") {
+          setPolling(false);
+          router.push(`/active-duel?poolId=${poolId}&wallet=${wallet}`);
+        } else if (data.status === "waiting" && data.player1 !== wallet) {
+          // If player1 is not us, we got kicked (timeout/refund)
+          setPolling(false);
+          setWaitingTimeout(true);
+        } else if (data.status === "waiting" && data.player1 === wallet) {
+          // Still waiting
+          timeout = setTimeout(poll, 2000);
+        } else if (data.status === "waiting" && !data.player1) {
+          // Pool reset, timeout
+          setPolling(false);
+          setWaitingTimeout(true);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    poll();
+    return () => clearTimeout(timeout);
+  }, [polling, poolId, router, wallet]);
+
+  // UI
   return (
     <div className="min-h-screen neon-bg relative overflow-hidden">
       {/* Floating Numbers Animation */}
@@ -145,22 +203,16 @@ export default function DuelPage() {
             >
               <Target className="h-4 w-4 text-[#00F0B5] mr-2" />
               <span className="text-sm text-white/80">
-                {action === "create"
-                  ? "Create New Battle"
-                  : "Join Existing Battle"}
+                Join Prediction Duel
               </span>
             </motion.div>
 
             <h1 className="text-5xl font-bold mb-4">
-              <span className="text-white">
-                {action === "create" ? "Create" : "Join"}{" "}
-              </span>
+              <span className="text-white">Join </span>
               <span className="neon-text">Duel</span>
             </h1>
             <p className="text-xl text-white/70">
-              {action === "create"
-                ? "Set up your prediction battle and wait for an opponent"
-                : "Enter your prediction to join the battle"}
+              Enter your prediction to join the battle
             </p>
           </div>
 
@@ -172,12 +224,18 @@ export default function DuelPage() {
                   <Sparkles className="h-5 w-5 text-[#00F0B5] mr-2" />
                   Select Asset
                 </label>
-                <Select value={selectedAsset} onValueChange={setSelectedAsset}>
+                <Select
+                  value={selectedAsset}
+                  onValueChange={(value) =>
+                    setSelectedAsset(value as "BTC" | "ETH" | "SOL")
+                  }
+                  disabled
+                >
                   <SelectTrigger className="w-full h-16 glass-card rounded-2xl text-white text-lg border-[#00F0B5]/30 hover:border-[#00F0B5]/50 transition-colors">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="glass-card border-[#00F0B5]/30">
-                    {Object.entries(assetIcons).map(([asset, icon]) => (
+                    {Object.keys(assetIcons).map((asset) => (
                       <SelectItem
                         key={asset}
                         value={asset}
@@ -194,7 +252,7 @@ export default function DuelPage() {
                               }20`,
                             }}
                           >
-                            {icon}
+                            {assetIcons[asset as keyof typeof assetIcons]}
                           </span>
                           <span className="text-lg">{asset}</span>
                           <span className="ml-auto text-[#00F0B5]">
@@ -225,6 +283,7 @@ export default function DuelPage() {
                           ? "border-[#00F0B5] bg-[#00F0B5]/20 text-[#00F0B5] neon-glow"
                           : "glass-card border-[#00F0B5]/30 text-white hover:border-[#00F0B5]/50"
                       }`}
+                      disabled
                       onClick={() => setSelectedAmount(amount)}
                       whileHover={{ scale: 1.05 }}
                       whileTap={{ scale: 0.95 }}
@@ -246,16 +305,11 @@ export default function DuelPage() {
                     <span
                       className="text-4xl mr-4 token-icon p-2 rounded-full"
                       style={{
-                        color:
-                          assetColors[
-                            selectedAsset as keyof typeof assetColors
-                          ],
-                        backgroundColor: `${
-                          assetColors[selectedAsset as keyof typeof assetColors]
-                        }20`,
+                        color: assetColors[selectedAsset],
+                        backgroundColor: `${assetColors[selectedAsset]}20`,
                       }}
                     >
-                      {assetIcons[selectedAsset as keyof typeof assetIcons]}
+                      {assetIcons[selectedAsset]}
                     </span>
                     <div>
                       <div className="text-lg text-white/70">Current Price</div>
@@ -276,53 +330,103 @@ export default function DuelPage() {
               </div>
 
               {/* Prediction Input */}
-              <div>
-                <label className="block text-lg font-semibold text-white mb-4 flex items-center">
-                  <Target className="h-5 w-5 text-[#00F0B5] mr-2" />
-                  Your Price Prediction (in 5 minutes)
-                </label>
-                <div className="relative">
-                  <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 h-6 w-6 text-[#00F0B5]" />
-                  <Input
-                    type="number"
-                    placeholder="Enter your prediction..."
-                    value={prediction}
-                    onChange={(e) => setPrediction(e.target.value)}
-                    className="w-full h-16 pl-12 glass-card rounded-2xl text-white text-lg placeholder:text-white/40 border-[#00F0B5]/30 focus:border-[#00F0B5] focus:ring-[#00F0B5]/50 neon-glow"
-                  />
+              {showPredictionInput && (
+                <div>
+                  <label className="block text-lg font-semibold text-white mb-4 flex items-center">
+                    <Target className="h-5 w-5 text-[#00F0B5] mr-2" />
+                    Your Price Prediction (in 5 minutes)
+                  </label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-4 top-1/2 transform -translate-y-1/2 h-6 w-6 text-[#00F0B5]" />
+                    <Input
+                      type="number"
+                      placeholder="Enter your prediction..."
+                      value={prediction}
+                      onChange={(e) => setPrediction(e.target.value)}
+                      className="w-full h-16 pl-12 glass-card rounded-2xl text-white text-lg placeholder:text-white/40 border-[#00F0B5]/30 focus:border-[#00F0B5] focus:ring-[#00F0B5]/50 neon-glow"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Error Message */}
+              {error && (
+                <div className="text-red-400 text-center font-semibold mb-4">
+                  {error}
+                </div>
+              )}
+
+              {/* Waiting Room UI */}
+              {waitingRoom && (
+                <div className="text-center py-8">
+                  <div className="flex flex-col items-center">
+                    <Clock className="h-10 w-10 text-[#00F0B5] mb-2 animate-pulse" />
+                    <div className="text-2xl font-bold neon-text mb-2">
+                      Waiting for another player to join...
+                    </div>
+                    <div className="text-white/70 mb-2">
+                      If no one joins in 60 seconds, you will be refunded.
+                    </div>
+                    <div className="flex items-center justify-center gap-2 mt-4">
+                      <Users className="h-6 w-6 text-[#00F0B5]" />
+                      <span className="text-white font-semibold">
+                        1 / 2 joined
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Timeout/Refund Message */}
+              {waitingTimeout && (
+                <div className="text-center py-8">
+                  <div className="text-red-400 text-2xl font-bold mb-2">
+                    Match Timeout – Refunded
+                  </div>
+                  <div className="text-white/70 mb-4">
+                    No other player joined in time. Please try again later.
+                  </div>
+                  <Button
+                    className="neon-button"
+                    onClick={() => router.push("/lobby")}
+                  >
+                    Back to Lobby
+                  </Button>
+                </div>
+              )}
 
               {/* Submit Button */}
-              <motion.div
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Button
-                  onClick={handleSubmit}
-                  disabled={!prediction || isSubmitting}
-                  className="neon-button w-full h-16 text-xl font-semibold rounded-2xl transition-all duration-300 group disabled:opacity-50 relative overflow-hidden"
+              {showPredictionInput && (
+                <motion.div
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
                 >
-                  {isSubmitting ? (
-                    <motion.div
-                      className="flex items-center"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                    >
-                      <div className="w-6 h-6 border-2 border-[#00F0B5] border-t-transparent rounded-full animate-spin mr-3" />
-                      Processing...
-                    </motion.div>
-                  ) : (
-                    <>
-                      <span className="relative z-10 flex items-center">
-                        {action === "create" ? "Create Pool" : "Join Pool"}
-                        <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
-                      </span>
-                      <div className="absolute inset-0 bg-gradient-to-r from-[#00F0B5]/20 to-[#00C896]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </>
-                  )}
-                </Button>
-              </motion.div>
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={!prediction || isSubmitting || !isConnected}
+                    className="neon-button w-full h-16 text-xl font-semibold rounded-2xl transition-all duration-300 group disabled:opacity-50 relative overflow-hidden"
+                  >
+                    {isSubmitting ? (
+                      <motion.div
+                        className="flex items-center"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                      >
+                        <div className="w-6 h-6 border-2 border-[#00F0B5] border-t-transparent rounded-full animate-spin mr-3" />
+                        Processing...
+                      </motion.div>
+                    ) : (
+                      <>
+                        <span className="relative z-10 flex items-center">
+                          Join Pool
+                          <ArrowRight className="ml-2 h-6 w-6 group-hover:translate-x-1 transition-transform" />
+                        </span>
+                        <div className="absolute inset-0 bg-gradient-to-r from-[#00F0B5]/20 to-[#00C896]/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
+              )}
             </div>
           </div>
         </motion.div>

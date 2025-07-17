@@ -8,13 +8,13 @@ export type PoolStatus = "waiting" | "active" | "completed";
 const ASSETS: Asset[] = ["BTC", "ETH", "SOL"];
 const TIERS: Tier[] = [100, 500, 1000];
 
-// Initialize 9 pools if not present
+// Always ensure 9 pools exist
 export async function initializePools() {
   for (const asset of ASSETS) {
     for (const tier of TIERS) {
       const poolId = `${asset}_${tier}`;
-      const exists = await PoolModel.findOne({ poolId });
-      if (!exists) {
+      let pool = await PoolModel.findOne({ poolId });
+      if (!pool) {
         await PoolModel.create({
           poolId,
           asset,
@@ -22,6 +22,13 @@ export async function initializePools() {
           status: "waiting",
           createdAt: Date.now(),
         });
+      } else {
+        // If pool exists but is deleted or corrupted, reset to waiting
+        if (!pool.status || !pool.createdAt) {
+          pool.status = "waiting";
+          pool.createdAt = Date.now();
+          await pool.save();
+        }
       }
     }
   }

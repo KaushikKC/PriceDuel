@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { getLatestPythPrices } from "@/lib/pyth";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
 
 export default function Header() {
   const pathname = usePathname();
@@ -80,7 +81,7 @@ export default function Header() {
           <div className="flex items-center space-x-4">
             <Button className="neon-button px-6 py-2 rounded-xl font-semibold hidden sm:flex items-center">
               <Wallet className="h-4 w-4 mr-2" />
-              Connect Wallet
+              <ConnectButton />
             </Button>
 
             {/* Mobile Menu Button */}
