@@ -14,6 +14,20 @@ import { Badge } from "@/components/ui/badge";
 import { useAccount } from "wagmi";
 import { useEffect, useState } from "react";
 
+interface HistoryItem {
+  id?: string;
+  poolId?: string;
+  asset: "BTC" | "ETH" | "SOL";
+  tier: 100 | 500 | 1000;
+  prediction: number;
+  opponentPrediction: number;
+  finalPrice: number;
+  result: "win" | "lose" | "draw";
+  amount: number;
+  date: number;
+  winner?: string;
+}
+
 const assetIcons = {
   BTC: "₿",
   ETH: "Ξ",
@@ -27,25 +41,25 @@ const assetColors = {
 };
 
 export default function HistoryPage() {
-  const { address: wallet, isConnected } = useAccount();
-  const [history, setHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { address: wallet } = useAccount();
+  const [history, setHistory] = useState<HistoryItem[]>([]);
   useEffect(() => {
     if (!wallet) return;
-    setLoading(true);
-    fetch(`/api/pools/user/${wallet}/history`).then(async (res) => {
-      const data = await res.json();
-      setHistory(data);
-      setLoading(false);
-    });
+    fetch(`http://localhost:4000/api/pools/user/${wallet}/history`).then(
+      async (res) => {
+        const data = await res.json();
+        setHistory(data);
+      }
+    );
   }, [wallet]);
 
-  const wins = history.filter((duel) => duel.winner === "user").length;
+  const wins = history.filter((duel) => duel.result === "win").length;
   const totalDuels = history.length;
-  const winRate = ((wins / totalDuels) * 100).toFixed(1);
+  const winRate =
+    totalDuels > 0 ? ((wins / totalDuels) * 100).toFixed(1) : "0.0";
   const totalWinnings = history
-    .filter((duel) => duel.winner === "user")
-    .reduce((sum, duel) => sum + duel.amount * 2, 0);
+    .filter((duel) => duel.result === "win")
+    .reduce((sum, duel) => sum + duel.amount, 0);
 
   return (
     <div className="min-h-screen neon-bg relative overflow-hidden">
@@ -230,33 +244,48 @@ export default function HistoryPage() {
 
                   {/* Your Prediction - Hidden on mobile */}
                   <div className="text-white font-mono text-sm hidden md:block">
-                    ${duel.userPrediction.toFixed(2)}
+                    $
+                    {duel.prediction !== undefined
+                      ? duel.prediction.toFixed(2)
+                      : "-"}
                   </div>
 
                   {/* Opponent - Hidden on mobile */}
                   <div className="text-white/70 font-mono text-sm hidden md:block">
-                    ${duel.opponentPrediction.toFixed(2)}
+                    $
+                    {duel.opponentPrediction !== undefined
+                      ? duel.opponentPrediction.toFixed(2)
+                      : "-"}
                   </div>
 
                   {/* Final Price - Hidden on mobile */}
                   <div className="neon-text font-mono text-sm hidden md:block">
-                    ${duel.finalPrice.toFixed(2)}
+                    $
+                    {duel.finalPrice !== undefined
+                      ? duel.finalPrice.toFixed(2)
+                      : "-"}
                   </div>
 
                   {/* Result */}
                   <div className="flex items-center justify-end md:justify-start">
                     <Badge
-                      className={`${
-                        duel.winner === "user"
-                          ? "bg-[#00F0B5]/20 text-[#00F0B5] border-[#00F0B5]/50 shadow-[0_0_10px_rgba(0,240,181,0.3)]"
-                          : "bg-red-500/20 text-red-400 border-red-500/30"
-                      } border font-semibold`}
+                      className={`
+                        ${
+                          duel.result === "win"
+                            ? "bg-[#00F0B5]/20 text-[#00F0B5] border-[#00F0B5]/50 shadow-[0_0_10px_rgba(0,240,181,0.3)]"
+                            : duel.result === "draw"
+                            ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+                            : "bg-red-500/20 text-red-400 border-red-500/30"
+                        }
+                        border font-semibold`}
                     >
-                      {duel.winner === "user" ? (
+                      {duel.result === "win" ? (
                         <>
                           <Trophy className="h-3 w-3 mr-1" />
-                          Won ${duel.amount * 2}
+                          Won ${duel.amount}
                         </>
+                      ) : duel.result === "draw" ? (
+                        <>Draw</>
                       ) : (
                         <>Lost ${duel.amount}</>
                       )}
@@ -281,13 +310,19 @@ export default function HistoryPage() {
                       <div>
                         <span className="text-white/60">Your: </span>
                         <span className="text-white">
-                          ${duel.userPrediction.toFixed(2)}
+                          $
+                          {duel.prediction !== undefined
+                            ? duel.prediction.toFixed(2)
+                            : "-"}
                         </span>
                       </div>
                       <div>
                         <span className="text-white/60">Final: </span>
                         <span className="neon-text">
-                          ${duel.finalPrice.toFixed(2)}
+                          $
+                          {duel.finalPrice !== undefined
+                            ? duel.finalPrice.toFixed(2)
+                            : "-"}
                         </span>
                       </div>
                     </div>

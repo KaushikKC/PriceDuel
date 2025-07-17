@@ -42,9 +42,6 @@ const mockPrices = {
   SOL: 175.89,
 };
 
-// Placeholder for wallet address (replace with real wallet integration)
-const WALLET = "0xTestWallet123";
-
 export default function DuelPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -99,11 +96,14 @@ export default function DuelPage() {
     setIsSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/pools/${poolId}/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ wallet, prediction: Number(prediction) }),
-      });
+      const res = await fetch(
+        `http://localhost:4000/api/pools/${poolId}/join`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wallet, prediction: Number(prediction) }),
+        }
+      );
       if (!res.ok) {
         const data = await res.json();
         setError(data.error || "Failed to join pool");
@@ -132,7 +132,7 @@ export default function DuelPage() {
     let timeout: NodeJS.Timeout;
     const poll = async () => {
       try {
-        const res = await fetch(`/api/pools/${poolId}`);
+        const res = await fetch(`http://localhost:4000/api/pools/${poolId}`);
         if (!res.ok) return;
         const data = await res.json();
         if (data.status === "active") {

@@ -41,7 +41,7 @@ type Pool = {
 };
 
 export default function LobbyPage() {
-  const { address: wallet, isConnected } = useAccount();
+  const { isConnected } = useAccount();
   const [pools, setPools] = useState<Pool[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<Asset>("BTC");
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,7 @@ export default function LobbyPage() {
   const fetchPools = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/pools");
+      const res = await fetch("http://localhost:4000/api/pools");
       const data = await res.json();
       setPools(data);
     } finally {
@@ -255,7 +255,9 @@ export default function LobbyPage() {
                                   {pool.status === "active"
                                     ? "Match Started"
                                     : pool.status === "waiting"
-                                    ? "Waiting for Player"
+                                    ? joinedCount === 0
+                                      ? "Be the first to join!"
+                                      : "Waiting for opponent..."
                                     : "Completed"}
                                 </div>
                               </div>

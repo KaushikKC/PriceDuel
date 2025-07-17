@@ -59,14 +59,14 @@ export default function ActiveDuelPage() {
   }>(null);
   const [settling, setSettling] = useState(false);
 
-  // Fetch pool state
+  // Fetch pool state only once on mount
   useEffect(() => {
     if (!poolId) return;
     let active = true;
     const fetchPool = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/pools/${poolId}`);
+        const res = await fetch(`http://localhost:4000/api/pools/${poolId}`);
         if (!res.ok) throw new Error("Pool not found");
         const data = await res.json();
         if (!active) return;
@@ -90,21 +90,19 @@ export default function ActiveDuelPage() {
       }
     };
     fetchPool();
-    const pollInterval = setInterval(fetchPool, 2000);
     return () => {
       active = false;
-      clearInterval(pollInterval);
     };
   }, [poolId]);
 
   // Countdown timer
   useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0) return;
+    if (timeLeft === null || timeLeft <= 0 || !pool) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev && prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft]);
+  }, [timeLeft, pool]);
 
   // Fetch live price
   useEffect(() => {
@@ -136,23 +134,26 @@ export default function ActiveDuelPage() {
 
   // Settle match when countdown ends
   useEffect(() => {
+    if (!poolId || !pool) return;
     if (
-      !poolId ||
-      !pool ||
-      pool.status !== "active" ||
+      pool?.status !== "active" ||
       timeLeft === null ||
       timeLeft > 0 ||
       settling
-    )
+    ) {
       return;
+    }
     setSettling(true);
     const settle = async () => {
       try {
-        const res = await fetch(`/api/pools/${poolId}/settle`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ finalPrice: currentPrice }),
-        });
+        const res = await fetch(
+          `http://localhost:4000/api/pools/${poolId}/settle`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ finalPrice: currentPrice }),
+          }
+        );
         if (!res.ok) throw new Error("Failed to settle match");
         const data = await res.json();
         setResult({ winner: data.winner, finalPrice: currentPrice! });
