@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ArrowRight,
@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSearchParams, useRouter } from "next/navigation";
+import { getLatestPythPrices } from "@/lib/pyth";
 
 const assetIcons = {
   BTC: "₿",
@@ -50,6 +51,41 @@ export default function DuelPage() {
   const [prediction, setPrediction] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const action = searchParams.get("action") || "create";
+  const [currentPrice, setCurrentPrice] = useState<number | null>(null);
+  const [isPriceLoading, setIsPriceLoading] = useState(true);
+
+  // When asset changes, reset amount to default
+  useEffect(() => {
+    setSelectedAmount("100");
+  }, [selectedAsset]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchPrice() {
+      setIsPriceLoading(true);
+      try {
+        const prices = await getLatestPythPrices();
+        if (isMounted && prices[selectedAsset]) {
+          // Remove $ and commas, parse as float
+          const price = parseFloat(
+            (prices[selectedAsset] as string).replace(/[$,]/g, "")
+          );
+          setCurrentPrice(price);
+        }
+      } catch {
+        // fallback to mock price if error
+        setCurrentPrice(mockPrices[selectedAsset as keyof typeof mockPrices]);
+      } finally {
+        setIsPriceLoading(false);
+      }
+    }
+    fetchPrice();
+    const timer = setTimeout(fetchPrice, 60000); // update once after 1 minute
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [selectedAsset]);
 
   const handleSubmit = async () => {
     if (!prediction) return;
@@ -225,9 +261,13 @@ export default function DuelPage() {
                       <div className="text-lg text-white/70">Current Price</div>
                       <div className="text-3xl font-bold neon-text">
                         $
-                        {mockPrices[
-                          selectedAsset as keyof typeof mockPrices
-                        ].toLocaleString()}
+                        {isPriceLoading ? (
+                          <span className="text-white/50">Loading...</span>
+                        ) : currentPrice !== null ? (
+                          currentPrice.toLocaleString()
+                        ) : (
+                          <span className="text-red-400">N/A</span>
+                        )}
                       </div>
                     </div>
                   </div>

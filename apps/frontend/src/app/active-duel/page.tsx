@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, Users, Zap, Target, Clock } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { getLatestPythPrices } from "@/lib/pyth";
 
 const assetIcons = {
   BTC: "₿",
@@ -33,11 +34,14 @@ export default function ActiveDuelPage() {
   const [currentPrice, setCurrentPrice] = useState(
     mockPrices[asset as keyof typeof mockPrices]
   );
+  const [isPriceLoading, setIsPriceLoading] = useState(true);
 
   // Mock opponent data
   const opponentPrediction = "43180.25";
 
   useEffect(() => {
+    let isMounted = true;
+    // Countdown timer logic
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -50,19 +54,32 @@ export default function ActiveDuelPage() {
       });
     }, 1000);
 
-    // Simulate price fluctuation
-    const priceTimer = setInterval(() => {
-      setCurrentPrice((prev) => {
-        const change = (Math.random() - 0.5) * 100;
-        return Math.max(0, prev + change);
-      });
-    }, 2000);
+    // Live price update logic
+    async function fetchPrice() {
+      setIsPriceLoading(true);
+      try {
+        const prices = await getLatestPythPrices();
+        if (isMounted && prices[asset]) {
+          const price = parseFloat(
+            (prices[asset] as string).replace(/[$,]/g, "")
+          );
+          setCurrentPrice(price);
+        }
+      } catch {
+        setCurrentPrice(mockPrices[asset as keyof typeof mockPrices]);
+      } finally {
+        setIsPriceLoading(false);
+      }
+    }
+    fetchPrice();
+    const priceTimer = setInterval(fetchPrice, 5000); // update every 5 seconds
 
     return () => {
+      isMounted = false;
       clearInterval(timer);
       clearInterval(priceTimer);
     };
-  }, []);
+  }, [asset]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -230,7 +247,11 @@ export default function ActiveDuelPage() {
                 animate={{ scale: 1 }}
                 transition={{ duration: 0.3 }}
               >
-                ${currentPrice.toFixed(2)}
+                {isPriceLoading ? (
+                  <span className="text-white/50">Loading...</span>
+                ) : (
+                  <>${currentPrice.toFixed(2)}</>
+                )}
               </motion.div>
               <div className="flex items-center justify-center text-[#00F0B5]">
                 <TrendingUp className="h-6 w-6 mr-2 pulse-glow" />

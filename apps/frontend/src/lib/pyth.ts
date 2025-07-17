@@ -29,10 +29,12 @@ export async function getLatestPythPrices() {
 
   // Map the result to asset keys and format as human-readable currency
   const result: Record<string, string | null> = {};
-  for (const [key] of Object.entries(PYTH_PRICE_IDS)) {
-    // const normId = normalizeId(id);
+  for (const [key, id] of Object.entries(PYTH_PRICE_IDS)) {
+    const cleanId = id.startsWith("0x")
+      ? id.slice(2).toLowerCase()
+      : id.toLowerCase();
     const update = Array.isArray(priceUpdates)
-      ? priceUpdates.find((p) => p.id)
+      ? priceUpdates.find((p) => p.id?.toLowerCase() === cleanId)
       : undefined;
 
     console.log(update, "update");

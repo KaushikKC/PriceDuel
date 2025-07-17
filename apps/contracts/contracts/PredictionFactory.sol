@@ -49,15 +49,16 @@ contract PredictionFactory {
 
     // Create a new pool (with Pyth updateData)
     function createPool(Asset asset, uint256 stake, int256 prediction, bytes[] calldata updateData) external payable {
-        require(msg.value == stake, "Incorrect ETH sent");
+        uint256 fee = pyth.getUpdateFee(updateData);
+        require(msg.value >= stake + fee, "Insufficient ETH for stake + Pyth fee");
         Pool storage pool = activePools[asset][stake];
         require(pool.player1 == address(0) || pool.status == PoolStatus.FINISHED, "Active pool exists");
-        // Update Pyth price feeds and get start price
-        pyth.updatePriceFeeds{value: msg.value}(updateData);
-        (int64 price, , int32 expo, ) = pyth.getPriceUnsafe(priceFeedIds[asset]);
-        int256 startPrice = int256(price);
-        if (expo < 0) {
-            startPrice = startPrice / int256(10 ** uint32(-expo));
+        // Pay only the Pyth fee to Pyth, keep the stake in the contract
+        pyth.updatePriceFeeds{value: fee}(updateData);
+        PythStructs.Price memory priceStruct = pyth.getPriceUnsafe(priceFeedIds[asset]);
+        int256 startPrice = int256(priceStruct.price);
+        if (priceStruct.expo < 0) {
+            startPrice = startPrice / int256(10 ** uint32(-priceStruct.expo));
         }
         activePools[asset][stake] = Pool({
             asset: asset,
@@ -92,17 +93,19 @@ contract PredictionFactory {
 
     // Settle the pool (with Pyth updateData)
     function settlePool(Asset asset, uint256 stake, bytes[] calldata updateData) external payable {
+        uint256 fee = pyth.getUpdateFee(updateData);
+        require(msg.value >= fee, "Insufficient ETH for Pyth fee");
         Pool storage pool = activePools[asset][stake];
         require(pool.player1 != address(0) && pool.player2 != address(0), "Pool not full");
         require(!pool.settled, "Already settled");
         require(pool.status == PoolStatus.LIVE, "Pool not live");
         require(block.timestamp >= pool.joinedTime + 5 minutes, "Too early to settle");
-        // Update Pyth price feeds and get end price
-        pyth.updatePriceFeeds{value: msg.value}(updateData);
-        (int64 price, , int32 expo, ) = pyth.getPriceUnsafe(priceFeedIds[asset]);
-        int256 endPrice = int256(price);
-        if (expo < 0) {
-            endPrice = endPrice / int256(10 ** uint32(-expo));
+        // Pay only the Pyth fee to Pyth
+        pyth.updatePriceFeeds{value: fee}(updateData);
+        PythStructs.Price memory priceStruct = pyth.getPriceUnsafe(priceFeedIds[asset]);
+        int256 endPrice = int256(priceStruct.price);
+        if (priceStruct.expo < 0) {
+            endPrice = endPrice / int256(10 ** uint32(-priceStruct.expo));
         }
         // Determine winner
         int256 diff1 = abs(pool.prediction1 - endPrice);
