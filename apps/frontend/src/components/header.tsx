@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import { Zap, Home, History, Wallet, Menu, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -79,10 +78,14 @@ export default function Header() {
 
           {/* Connect Wallet Button */}
           <div className="flex items-center space-x-4">
-            <Button className="neon-button px-6 py-2 rounded-xl font-semibold hidden sm:flex items-center">
+            <div className="neon-button px-6 py-2 rounded-xl font-semibold hidden sm:flex items-center cursor-pointer">
               <Wallet className="h-4 w-4 mr-2" />
-              <ConnectButton />
-            </Button>
+              <ConnectButton
+                showBalance={false}
+                chainStatus="icon"
+                accountStatus="address"
+              />
+            </div>
 
             {/* Mobile Menu Button */}
             <button
@@ -126,18 +129,17 @@ export default function Header() {
                   </Link>
                 );
               })}
-              <Button className="neon-button w-full mt-4 py-3 rounded-xl font-semibold">
+              <div className="neon-button w-full mt-4 py-3 rounded-xl font-semibold flex items-center justify-center cursor-pointer">
                 <Wallet className="h-4 w-4 mr-2" />
-                Connect Wallet
-              </Button>
+                <ConnectButton
+                  showBalance={false}
+                  chainStatus="icon"
+                  accountStatus="address"
+                />
+              </div>
             </nav>
           </motion.div>
         )}
-        <div className="flex gap-4 items-center text-xs text-gray-400 mt-2">
-          <span>BTC: {prices.BTC ?? "-"}</span>
-          <span>ETH: {prices.ETH ?? "-"}</span>
-          <span>SOL: {prices.SOL ?? "-"}</span>
-        </div>
       </div>
     </motion.header>
   );

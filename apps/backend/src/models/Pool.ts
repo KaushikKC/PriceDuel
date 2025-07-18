@@ -13,6 +13,7 @@ export interface IPool extends Document {
   endTime?: number;
   winner?: string;
   createdAt: number;
+  finalPrice?: number;
 }
 
 const PoolSchema: Schema = new Schema({
@@ -32,6 +33,7 @@ const PoolSchema: Schema = new Schema({
   endTime: { type: Number },
   winner: { type: String },
   createdAt: { type: Number, required: true },
+  finalPrice: { type: Number },
 });
 
 export default mongoose.model<IPool>("Pool", PoolSchema);

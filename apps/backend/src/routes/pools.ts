@@ -7,6 +7,7 @@ import {
   settlePool,
   getUserHistory,
   initializePools,
+  getLatestBackendPrice,
 } from "../pools";
 
 const router = Router();
@@ -60,11 +61,7 @@ router.post("/:poolId/leave", async (req: Request, res: Response) => {
 // Settle pool (after 5 min, with final price)
 router.post("/:poolId/settle", async (req: Request, res: Response) => {
   await ensurePools();
-  const { finalPrice } = req.body;
-  if (typeof finalPrice !== "number") {
-    return res.status(400).json({ error: "finalPrice required" });
-  }
-  const result = await settlePool(req.params.poolId, finalPrice);
+  const result = await settlePool(req.params.poolId);
   if (result.error) return res.status(400).json({ error: result.error });
   res.json(result.pool);
 });
@@ -75,6 +72,15 @@ router.get("/user/:wallet/history", async (req: Request, res: Response) => {
   if (!wallet) return res.status(400).json({ error: "wallet required" });
   const history = await getUserHistory(wallet);
   res.json(history);
+});
+
+// Get latest price for an asset
+router.get("/price/:asset", async (req: Request, res: Response) => {
+  const { asset } = req.params;
+  const price = getLatestBackendPrice(asset);
+  if (price == null)
+    return res.status(404).json({ error: "Price not available" });
+  res.json({ price });
 });
 
 export default router;

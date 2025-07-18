@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { TrendingUp, Users, Zap, Target, Clock } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { getLatestPythPrices } from "@/lib/pyth";
 import { Button } from "@/components/ui/button";
 import { useAccount } from "wagmi";
 
@@ -40,6 +39,7 @@ interface Pool {
   endTime?: number;
   winner?: string;
   createdAt: number;
+  finalPrice?: number;
 }
 
 export default function ActiveDuelPage() {
@@ -95,28 +95,29 @@ export default function ActiveDuelPage() {
     };
   }, [poolId]);
 
-  // Countdown timer
+  // Local smooth countdown timer
   useEffect(() => {
-    if (timeLeft === null || timeLeft <= 0 || !pool) return;
+    if (timeLeft === null || timeLeft <= 0) return;
     const timer = setInterval(() => {
       setTimeLeft((prev) => (prev && prev > 0 ? prev - 1 : 0));
     }, 1000);
     return () => clearInterval(timer);
-  }, [timeLeft, pool]);
+  }, [timeLeft]);
 
-  // Fetch live price
+  // Fetch live price from backend
   useEffect(() => {
-    if (!pool) return;
+    if (!pool?.asset) return;
     let isMounted = true;
-    async function fetchPrice() {
+    async function fetchBackendPrice() {
       setIsPriceLoading(true);
       try {
-        const prices = await getLatestPythPrices();
-        if (isMounted && prices[pool.asset]) {
-          const price = parseFloat(
-            (prices[pool.asset] as string).replace(/[$,]/g, "")
-          );
-          setCurrentPrice(price);
+        const res = await fetch(
+          `http://localhost:4000/api/pools/price/${pool.asset}`
+        );
+        if (!res.ok) throw new Error("Price not available");
+        const data = await res.json();
+        if (isMounted && typeof data.price === "number") {
+          setCurrentPrice(data.price);
         }
       } catch {
         setCurrentPrice(mockPrices[pool.asset as keyof typeof mockPrices]);
@@ -124,12 +125,19 @@ export default function ActiveDuelPage() {
         setIsPriceLoading(false);
       }
     }
-    fetchPrice();
-    const priceTimer = setInterval(fetchPrice, 5000);
+    fetchBackendPrice();
+    const priceTimer = setInterval(fetchBackendPrice, 5000);
     return () => {
       isMounted = false;
       clearInterval(priceTimer);
     };
+  }, [pool]);
+
+  // Use pool.finalPrice after settlement
+  useEffect(() => {
+    if (pool?.status === "completed" && typeof pool.finalPrice === "number") {
+      setCurrentPrice(pool.finalPrice);
+    }
   }, [pool]);
 
   // Settle match when countdown ends
@@ -438,7 +446,15 @@ export default function ActiveDuelPage() {
                 {isPriceLoading ? (
                   <span className="text-white/50">Loading...</span>
                 ) : (
-                  <>${currentPrice?.toLocaleString()}</>
+                  <>
+                    $
+                    {currentPrice !== null
+                      ? currentPrice.toLocaleString(undefined, {
+                          maximumFractionDigits: 2,
+                          minimumFractionDigits: 2,
+                        })
+                      : "-"}
+                  </>
                 )}
               </motion.div>
               <div className="flex items-center justify-center text-[#00F0B5]">
